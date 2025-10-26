@@ -3,3 +3,21 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+# PlatformIO
+.pio/
+.vscode/
+
+# Build & Library Cache
+/.platformio/
+/libdeps/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Personal files
+*.suo
+*.user
+*.bak

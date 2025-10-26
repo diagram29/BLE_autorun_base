@@ -5,6 +5,7 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include <Wire.h>
+#include "logger.h"
 
 #define INTERVAL 1000 //millisec
 
@@ -71,6 +72,9 @@ class MyCallbacks: public BLECharacteristicCallbacks {
       delay(10);
     bReceived=true;
 
+    // ⭐️ ログ機能の追加：コマンドを受信したらログに記録する ⭐️
+    logData("RX_CMD: " + tempRxValue);
+
     int temp_val_ipt = tempRxValue.toInt();
     if (temp_val_ipt == 93 || temp_val_ipt == 99) {
         emergency_stop_flag = true; 
@@ -95,6 +99,10 @@ void setup()
   //SerialBT.begin("ESP自動往復外用"); //SE通信開始 名称 1.自動往復1内用 2.自動往復2外用 3.STAMP開発用
 
  // Serial1.begin(19200,SERIAL_8N1,3,1);//IO3 RX  , IO1 TX
+
+ // ⭐️ ログ機能の初期化を追加 ⭐️
+   initLogger();
+    logData("SYSTEM: Setup Start");
 
 
  // BLEデバイスの初期化
@@ -131,6 +139,11 @@ void setup()
     for(int i=0;i<4;i++){pinMode(relay[i], OUTPUT); 
                          digitalWrite(relay[i], str[1]);} //リレー1-4　選択 オフ
     downr = 0.5;
+
+    logData("SYSTEM: Setup Finished");
+
+    // ⭐️ テスト用：起動時にログ内容をシリアルに出力 ⭐️
+   readAndPrintLog();
 }
 
 void help(){mes("\n-- 自動走行システム ヘルプ --");
@@ -153,6 +166,7 @@ void help(){mes("\n-- 自動走行システム ヘルプ --");
 void mes(String a){//SerialBT.println(a);
       String message_with_newline = a + "\n";
       Serial.println(a);
+        logData("TX_MES: " + a);
         // ⭐️ 修正: StringをC文字列(char*)に変換 ⭐️
         pTxCharacteristic->setValue(message_with_newline.c_str());
         pTxCharacteristic->notify();
@@ -258,6 +272,8 @@ void loop() {
 else if(iptData.startsWith("dows")){ awe=hen("s","x");dows(String(awe)+"秒降下",awe);}
     //下降値設定
 else if(iptData.startsWith("setd")){ downr=hen("d","x");mes("下降値を" + String(downr) + "に設定しました");}
+// ⭐️ 新規コマンド: ログ表示 ⭐️
+else if(iptData == "showlog"){ readAndPrintLog(); mes("ログをシリアルに出力しました"); }
 
 //リレー入力処理
 else if (val_ipt == 93) {emj();}   //緊急停止
