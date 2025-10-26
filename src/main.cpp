@@ -273,7 +273,10 @@ else if(iptData.startsWith("dows")){ awe=hen("s","x");dows(String(awe)+"秒降�
     //下降値設定
 else if(iptData.startsWith("setd")){ downr=hen("d","x");mes("下降値を" + String(downr) + "に設定しました");}
 // ⭐️ 新規コマンド: ログ表示 ⭐️
-else if(iptData == "showlog"){ readAndPrintLog(); mes("ログをシリアルに出力しました"); }
+else if(iptData == "showlog"){ 
+  readAndPrintLog(); mes("ログをシリアルに出力しました"); 
+  sendLogChunk(pTxCharacteristic); // 👈 mes()を呼び出していないので安全
+}
 
 //リレー入力処理
 else if (val_ipt == 93) {emj();}   //緊急停止

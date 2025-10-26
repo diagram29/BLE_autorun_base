@@ -8,11 +8,17 @@
 
 // ログファイル名
 const char* LOG_FILE_PATH = "/operation_log.txt";
-
+const size_t CHUNK_SIZE = 500;
 // =========================================================
-// ログ機能の実装
+// ログ機能の実装（抜粋と修正）
 // =========================================================
 
+// initLogger() と logData() は変更なし。（logDataはSPIFFSへの書き込みのみ）
+
+/**
+ * @brief ログファイルを読み出し、BLECharacteristic経由でチャンク送信します。
+ * @param pTxCharacteristic BLEの送信特性ポインタ
+ */
 /**
  * @brief SPIFFSファイルシステムを初期化します。
  */
@@ -61,6 +67,59 @@ void logData(const String& logMessage) {
   logFile.close();
 }
 
+/**
+ * @brief ログファイルを読み出し、BLECharacteristic経由でチャンク送信します。
+ * @param pTxCharacteristic BLEの送信特性ポインタ
+ */
+void sendLogChunk(BLECharacteristic* pTxCharacteristic) {
+    if (!pTxCharacteristic) {
+        Serial.println("ERROR: BLE特性ポインタが無効です。ログを送信できません。");
+        return;
+    }
+
+    File logFile = SPIFFS.open(LOG_FILE_PATH, FILE_READ);
+    
+    if (!logFile) {
+        Serial.println("ERROR: ログファイルが見つかりません。");
+        // 受信側にエラーを通知するために、BLEでメッセージを送る
+        pTxCharacteristic->setValue("ERROR: Log file not found.");
+        pTxCharacteristic->notify();
+        return;
+    }
+
+    // 転送開始メッセージをBLEで送信
+    String startMsg = "--- LOG START (Total Size: " + String(logFile.size()) + " bytes) ---\n";
+    pTxCharacteristic->setValue(startMsg.c_str());
+    pTxCharacteristic->notify();
+    Serial.print(startMsg); // シリアルモニタにも出力
+    delay(50); 
+    
+    char buffer[CHUNK_SIZE + 1]; 
+
+    while (logFile.available()) {
+        size_t bytesRead = logFile.readBytes(buffer, CHUNK_SIZE);
+        buffer[bytesRead] = '\0'; 
+
+        // 読み出したデータをBLEで送信
+        pTxCharacteristic->setValue(buffer);
+        pTxCharacteristic->notify();
+        
+        // 転送間隔。受信側の処理能力に応じて調整
+        delay(50); 
+    }
+
+    logFile.close();
+
+    // 転送完了メッセージをBLEで送信
+    pTxCharacteristic->setValue("--- LOG COMPLETE ---");
+    pTxCharacteristic->notify();
+    Serial.println("--- LOG COMPLETE ---");
+}
+
+
+
+
+
 
 /**
  * @brief 保存されている全ログをシリアルモニタに出力します。
@@ -77,6 +136,8 @@ void readAndPrintLog() {
   // ファイルの内容をすべてシリアルに出力
   while(logFile.available()){
     Serial.write(logFile.read());
+
+
   }
   
   Serial.println("--- SPIFFS LOG FILE CONTENT END ---");
