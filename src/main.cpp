@@ -84,7 +84,7 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 }}};
 
 unsigned long myTime = millis() / 1000;
-const int relay[]={4,5,6,7};  // GPIOピン リレー変数[0,1,2,3]  eps32[12,14,27,26] stamp pico[25,22,21,19]　上下左右
+const int relay[]={8,10,6,7};  // GPIOピン リレー変数[0,1,2,3]  eps32[12,14,27,26] stamp pico[25,22,21,19]　上下左右
 const int str[]={1,0}; // HIGH:1 LOW:0
 int val_ipt; //シリアル通信入力変数
 
