@@ -84,7 +84,7 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 }}};
 
 unsigned long myTime = millis() / 1000;
-const int relay[]={8,10,6,7};  // GPIOピン リレー変数[0,1,2,3]  eps32[12,14,27,26] stamp pico[25,22,21,19]　上下左右
+const int relay[]={8,10,6,7,5,4};  // GPIOピン リレー変数[0,1,2,3]  eps32[12,14,27,26] stamp pico[25,22,21,19]　上下左右
 const int str[]={1,0}; // HIGH:1 LOW:0
 int val_ipt; //シリアル通信入力変数
 
@@ -106,7 +106,7 @@ void setup()
 
 
  // BLEデバイスの初期化
-  BLEDevice::init("ESPautoLAN32"); // デバイス名を設定
+  BLEDevice::init("autobredeRAN2"); // デバイス名を設定
   //サーバーを作成
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -136,7 +136,7 @@ void setup()
       "\n下降設定値は現在0.2秒"
       "\n上下左右の各処理はそれぞれのボタンを押してください");
    //リレー初期処理 
-    for(int i=0;i<4;i++){pinMode(relay[i], OUTPUT); 
+    for(int i=0;i<6;i++){pinMode(relay[i], OUTPUT); 
                          digitalWrite(relay[i], str[1]);} //リレー1-4　選択 オフ
     downr = 0.5;
 
@@ -192,7 +192,7 @@ void dows(String a,float b){mes(a); down(); mit(b*1000); udstop();}
 
 
 void emj(){mes("緊急停止");  //緊急停止 信号
-   for(int i=0;i<4;i++){pinMode(relay[i], OUTPUT); 
+   for(int i=0;i<6;i++){pinMode(relay[i], OUTPUT); 
                         digitalWrite(relay[i], str[1]);}} //リレー1-4　選択 オフ
 
         
@@ -209,6 +209,9 @@ void rrey(String a,int b,int c,int d,int e){mes(a);
 
     void udstop (){rrey("上下停止",  0,1,      1,1);}
     void lrstop (){rrey("走行停止",  2,3,      1,1);}
+
+    void nocostart (){rrey("ノコスタート", 4,4,  1,1);}
+    void nocostop  (){rrey("ノコ停止",     4,4,  0,0);}
 
 
 //自動往復処理
@@ -288,7 +291,9 @@ else{ switch (val_ipt) {
     case 12:down();    break;  //下降
     case 21:left();    break;  //左走行
     case 20:lrstop();  break;  //走行停止
-    case 22:right();   break;  //右走行   
+    case 22:right();   break;  //右走行  
+    case 31:nocostart();break;  //ノコスタート
+    case 30:nocostop(); break;  //ノコ停止
   
     case 99:emj();break; //現在の動作が終了次停止
     default:mes("入力は半角英数字です範囲外または無効です\nコマンドの連続送信に注意"); break;}
