@@ -457,7 +457,7 @@ void sendData(uint8_t category_id, float numerical_value) {
 }
 
 void resetFunc() {
-    mes("\n*** SYSTEM: Performing software restart (ESP.restart()) ***");
+    //mes("\n*** SYSTEM: Performing software restart (ESP.restart()) ***");
     Serial.flush(); // シリアル出力が完了するのを待つ
     // mes()がキューに届き、bleTaskで処理されるのを少し待つ
     vTaskDelay(pdMS_TO_TICKS(100)); 
