@@ -161,6 +161,18 @@ void help(){mes("\n-- 自動走行システム ヘルプ --");
             mes(" setdx: 下降値を変更 (例: setd0.3x)");
             mes(" dowsx: 設定秒数降下 (例: dows0.8x)");
             mes(" 入力はすべて半角英数字です。");
+            mes("\n-11:up        上昇"
+                "\n-10:udstop    上下停止"
+                "\n-12:down      下降\n"
+
+                "\n-21:left      左走行"
+                "\n-20:lrstop    走行停止"
+                "\n-22:right     右走行\n"
+
+                "\n-31:nocostart ノコスタート"
+                "\n-30:nocostop  ノコ停止\n"
+
+                "\n-99:emj       現在の動作が終了次停止");
                                 }
 //メッセージを表示する
 void mes(String a){//SerialBT.println(a);
@@ -191,7 +203,7 @@ void mit(float ms) {
 void dows(String a,float b){mes(a); down(); mit(b*1000); udstop();}
 
 
-void emj(){mes("緊急停止");  //緊急停止 信号
+void emj(){mes("緊急停止""\n現在" + String(myTime) + "秒経過");  //緊急停止 信号
    for(int i=0;i<6;i++){pinMode(relay[i], OUTPUT); 
                         digitalWrite(relay[i], str[1]);}} //リレー1-4　選択 オフ
 
@@ -201,17 +213,17 @@ void rrey(String a,int b,int c,int d,int e){mes(a);
   for (int i = b; i < c+1; i++) {pinMode(relay[i], OUTPUT);}
         digitalWrite(relay[b], str[d]);
         digitalWrite(relay[c], str[e]);}     // HIGH:1 LOW:0
-    void up     (){rrey("上昇",      0,1,      0,1);}
-    void down   (){rrey("下降",      0,1,      1,0);}
+    void up     (){rrey("上昇します",      0,1,      0,1);}
+    void down   (){rrey("下降します",      0,1,      1,0);}
 
-    void left   (){rrey("右走行",    2,3,      0,1);}
-    void right  (){rrey("左走行",    2,3,      1,0);}
+    void left   (){rrey("右走行です",    2,3,      0,1);}
+    void right  (){rrey("左走行です",    2,3,      1,0);}
 
-    void udstop (){rrey("上下停止",  0,1,      1,1);}
-    void lrstop (){rrey("走行停止",  2,3,      1,1);}
+    void udstop (){rrey("上下を停止します",  0,1,      1,1);}
+    void lrstop (){rrey("走行を停止します",  2,3,      1,1);}
 
-    void nocostart (){rrey("ノコスタート", 4,4,  1,1);}
-    void nocostop  (){rrey("ノコ停止",     4,4,  0,0);}
+    void nocostart (){rrey("ノコを回転します", 4,4,  1,1);}
+    void nocostop  (){rrey("ノコを停止",     4,4,  0,0);}
 
 
 //自動往復処理
@@ -247,7 +259,10 @@ void atlan(){
                         "\n片下げ0.5cmの場合" + String(i2) + "/" + String(sc2*2) + "cmです"
                         "\n速度を変えると距離が変化しますご注意下さい"
                         "\nコマンド" + String(iptData) + "実行中…\n");
- }}bailout:;}
+ }
+mes("\n指示" + String(iptData) + "処理が終了しました"
+        "\nシステム起動から" + String(myTime) + "秒経過中…");
+}bailout:;}
 
 
 //BLE用プログラム
@@ -261,6 +276,7 @@ void loop() {
     iptData = rxValue;
     val_ipt = iptData.toInt();
     myTime = millis()/1000;
+    mes("処理" + String(iptData) + "を受付\n起動から" + String(myTime) + "秒経過中…");
     atlan();
     //区切りから区切りまでのデータを取得
     //iｆ分そのものをオブジェクト化するとやりやすいかも
@@ -284,7 +300,7 @@ else if(iptData == "showlog"){
 //リレー入力処理
 else if (val_ipt == 93) {emj();}   //緊急停止
 else{ switch (val_ipt) {
-  
+
   //リレー駆動
     case 11:up();      break;  //上昇
     case 10:udstop();  break;  //上下停止
@@ -298,8 +314,6 @@ else{ switch (val_ipt) {
     case 99:emj();break; //現在の動作が終了次停止
     default:mes("入力は半角英数字です範囲外または無効です\nコマンドの連続送信に注意"); break;}
 }
-    mes("\nコマンド" + String(iptData) + "処理が終了しました"
-        "\nシステム起動から" + String(myTime) + "秒経過中…");
         rxValue = "";
         }
 }else{bReceived=false;}
