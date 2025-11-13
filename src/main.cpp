@@ -70,6 +70,13 @@ unsigned long lastCountTime = 0;
 int interval = INTERVAL; //millisec
 
 
+// 構造体の定義 (コードのグローバル変数定義付近に追加)
+struct BleData {
+    uint8_t category; // データの種類を示すカテゴリID (例: 1=走行時間, 2=残りのサイクル数)
+    float value;      // 送りたい実際の数値 (例: 15.0秒, 10回)
+};
+
+
 // =========================================================
 // 3. 関数プロトタイプ（フォワードデクラレーション）をここに追加
 // =========================================================
@@ -94,6 +101,9 @@ void rrey(String a,int b,int c,int d,int e);
 void up(); void down(); void left(); void right();
 void udstop(); void lrstop();
 void nocostart(); void nocostop(); // ノコ制御
+
+// リセット関数
+void resetFunc(); // ★ 追加 ★
 
 
 
@@ -293,6 +303,10 @@ else if(iptData == "showlog"){
         readAndPrintLog(); mes("ログをシリアルに出力しました"); 
         sendLogChunk(pTxCharacteristic); // 👈 mes()を呼び出していないので安全
 }
+else if(iptData == "restart"){ 
+        mes("再起動コマンドを受付ました。システムを再起動します。");
+        resetFunc(); // リセットを実行
+}
 
 //リレー入力処理
 else if (val_ipt == 93) {emj();}   //緊急停止
@@ -394,18 +408,22 @@ void mit(float ms) {
     
     // 前回カウント処理をしてから10秒（counthterval）以上経過したかチェック
     if(correntTime - lastCountTime >= 10000){
-      
+
         // 経過時刻を更新（次の10秒を測るため）
         lastCountTime = correntTime;
         
         // カウントを増やす
         count = count + 10;
-        
         // メッセージをBLEとシリアルに出力
         // mes関数はBLE通知も行います
         mes(String(count) + "秒,経過しました ");//後ほど速度も追加する
-        
+       
     };
+     
+
+
+
+
   // 💡 FreeRTOS環境ならここに vTaskDelay(1); を入れるのが理想
    vTaskDelay(pdMS_TO_TICKS(1));
 
@@ -417,6 +435,36 @@ void mit(float ms) {
   lastCountTime = millis();
 
 }
+
+
+void sendData(uint8_t category_id, float numerical_value) {
+    // 1. データ構造体に値を格納
+    BleData data;
+    data.category = category_id;
+    data.value = numerical_value;
+
+    // 2. シリアルに出力（デバッグ用）
+    Serial.printf("TX_DATA: Category=%d, Value=%.2f\n", category_id, numerical_value);
+    
+    // 3. ログに記録
+    logData("TX_DATA: Cat:" + String(category_id) + ", Val:" + String(numerical_value, 2));
+
+    // 4. キューに構造体をコピーして送信
+    if (messageQueue != NULL) {
+        // 構造体をキューに送信（待機時間：0）
+        xQueueSend(messageQueue, &data, 0);
+    }
+}
+
+void resetFunc() {
+    mes("\n*** SYSTEM: Performing software restart (ESP.restart()) ***");
+    Serial.flush(); // シリアル出力が完了するのを待つ
+    // mes()がキューに届き、bleTaskで処理されるのを少し待つ
+    vTaskDelay(pdMS_TO_TICKS(100)); 
+    ESP.restart(); }
+
+
+
 
 
 
@@ -467,8 +515,8 @@ void atlan(){
                 }
              
              /*繰り返し処理メイン*/
-             switch(start1){case 1: left();  mes("手前へ" + String(as1) + "秒移動中です"); break; 
-                            case 2: right(); mes("奥へ" + String(as1) + "秒移動中です"); break;} /*左から右へ  と 右から左へ　のスタート折り返しと逆転*/
+             switch(start1){case 1: left();  mes("奥へ" + String(as1) + "秒移動中です"); break; 
+                            case 2: right(); mes("手前へ" + String(as1) + "秒移動中です"); break;} /*左から右へ  と 右から左へ　のスタート折り返しと逆転*/
                   
                mit(as1*1000);
 
