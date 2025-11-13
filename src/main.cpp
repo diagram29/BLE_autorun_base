@@ -40,6 +40,12 @@ void atlan();
 BLEServer *pServer = NULL;
 BLECharacteristic * pTxCharacteristic;
 
+int count = 0;
+unsigned long lastCountTime = 0;
+unsigned long counthterval = 10000;
+
+
+
 String rxValue = "";
 bool devCon = false, oldDevCon = false;
 bool bReceived=false;
@@ -106,7 +112,7 @@ void setup()
 
 
  // BLEデバイスの初期化
-  BLEDevice::init("autobredeRAN2"); // デバイス名を設定
+  BLEDevice::init("自動走行デバイス外"); // デバイス名を設定
   //サーバーを作成
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -133,7 +139,7 @@ void setup()
 
 
   mes("\nようこそ！自動走行システムへ"
-      "\n下降設定値は現在0.2秒"
+      "\n下降設定値は現在0.5秒"
       "\n上下左右の各処理はそれぞれのボタンを押してください");
    //リレー初期処理 
     for(int i=0;i<6;i++){pinMode(relay[i], OUTPUT); 
@@ -147,7 +153,7 @@ void setup()
 }
 
 void help(){mes("\n-- 自動走行システム ヘルプ --");
-            mes("下降設定値は現在0.2秒です。");
+            mes("下降設定値は現在0.5秒です。");
             mes("\n-- オートパイロット (atlan) --");
           
             mes("起動は以下のように記述してください。");
@@ -197,8 +203,34 @@ float hen(String a , String b) {float result = String(iptData.substring(int(iptD
 void mit(float ms) {
   unsigned long start = millis();
   while (millis() - start < ms) {
+
+    // ----------------------------------------------------------------
+    // 【💡 10秒ごとのカウントアップ処理】
+    // ----------------------------------------------------------------
+    unsigned long correntTime = millis();
+    
+    // 前回カウント処理をしてから10秒（counthterval）以上経過したかチェック
+    if(correntTime - lastCountTime >= counthterval){
+      
+        // 経過時刻を更新（次の10秒を測るため）
+        lastCountTime = correntTime;
+        
+        // カウントを増やす
+        count = count + 10;
+        
+        // メッセージをBLEとシリアルに出力
+        // mes関数はBLE通知も行います
+        mes(String(count) + "秒経過しました ");//後ほど速度も追加する
+    };
+ 
   //if(SerialBT.available()){break;}
-  }}
+  }
+// 待機終了後、合計カウント値をリセット（デモのため）
+  count = 0;
+  // 次の mit 呼び出しに備えて時刻をリセット
+  lastCountTime = millis();
+
+}
 //降下処理
 void dows(String a,float b){mes(a); down(); mit(b*1000); udstop();}
 
@@ -216,8 +248,8 @@ void rrey(String a,int b,int c,int d,int e){mes(a);
     void up     (){rrey("上昇します",      0,1,      0,1);}
     void down   (){rrey("下降します",      0,1,      1,0);}
 
-    void left   (){rrey("右走行です",    2,3,      0,1);}
-    void right  (){rrey("左走行です",    2,3,      1,0);}
+    void left   (){rrey("奥へ走行します",    2,3,      0,1);}
+    void right  (){rrey("手前へ走行します",    2,3,      1,0);}
 
     void udstop (){rrey("上下を停止します",  0,1,      1,1);}
     void lrstop (){rrey("走行を停止します",  2,3,      1,1);}
@@ -247,16 +279,20 @@ void atlan(){
              switch(start1){case 1: left();  break; 
                             case 2: right(); break;} /*左から右へ  と 右から左へ　のスタート折り返しと逆転*/
 
-               mes("片道" + String(as1) + "秒移動中です"); mit(as1*1000);
+             switch(start1){case 1: mes("奥へ" + String(as1) + "秒移動中です");  break; 
+                            case 2: mes("手前へ" + String(as1) + "秒移動中です"); break;} 
+                  
+
+               mit(as1*1000);
 
              switch(start1){case 1: mes("修正" + String(cb3) + "秒/10 移動"); mit(cb3*100); start1 =2; break;
                             case 2: mes("修正" + String(bd4) + "秒/10 移動"); mit(bd4*100); start1 =1; break; } 
                lrstop(); mit(200); dows(String(downr) +"秒降下",downr); mit(200);
                mes(" \n折返します");}
                
-            mes("\n片道" + String(as1) + "秒往復の" + String(i2) + "/" + String(sc2) + "回目です"
+            mes("\n現在片道" + String(as1) + "秒往復の" + String(i2) + "/" + String(sc2) + "回目です"
                         "\nあと" + String(kkt) + "秒です"
-                        "\n片下げ0.5cmの場合" + String(i2) + "/" + String(sc2*2) + "cmです"
+                        //"\n片下げ0.5cmの場合" + String(i2) + "/" + String(sc2*2) + "cmです"
                         "\n速度を変えると距離が変化しますご注意下さい"
                         "\nコマンド" + String(iptData) + "実行中…\n");
  }
