@@ -53,7 +53,8 @@ BLECharacteristic * pTxCharacteristic;
 // 状態管理
 String rxValue = "";  // 受信したBLEコマンド
 String iptData;       // 処理中のコマンド
-bool devCon = false, oldDevCon = false; // BLE接続状態
+// bool devCon = false, oldDevCon = false; // BLE接続状態
+int connectedClientCount = 0;     //BLE接続状態　接続切断での判断をやめ　複数台接続に対応
 bool bReceived=false;             // 受信フラグ (使用箇所が少ないため整理可能だが現状維持)
 bool emergency_stop_flag = false; // 緊急停止フラグ
 
@@ -74,6 +75,11 @@ int interval = INTERVAL; //millisec
 struct BleData {
     uint8_t category; // データの種類を示すカテゴリID (例: 1=走行時間, 2=残りのサイクル数)
     float value;      // 送りたい実際の数値 (例: 15.0秒, 10回)
+};
+
+struct CommandPacket {
+    uint8_t command_id; // 実行する動作ID (例: 11 = 上昇)
+    float parameter;    // 必要なパラメータ (例: 0.5秒, サイクル数など。不要なら0.0)
 };
 
 
@@ -114,15 +120,35 @@ void resetFunc(); // ★ 追加 ★
 
 // BLEサーバー接続/切断コールバック
 class MyServerCallbacks: public BLEServerCallbacks {
-  void onConnect(BLEServer* pServer) {devCon = true;
-                                      Serial.println("** 接続");};
-  void onDisconnect(BLEServer* pServer) {
-    devCon = false;
+  void onConnect(BLEServer* pServer) {
+    //devCon = true;Serial.println("** 接続");
+    // 接続時にカウンタを増やす
+    connectedClientCount++;
+    mes("✅ 新しいデバイスが接続されました。現在 " + String(connectedClientCount) + " 台接続中");
+    pServer->getAdvertising()->start();
+    
+    Serial.printf("** 接続されました。現在 %d 台接続中\n", connectedClientCount);
+
+  };
+  //void onDisconnect(BLEServer* pServer) {
+    /*devCon = false;
     //oldDevCon = false;
-    Serial.println("** 切断");
-    pServer->startAdvertising(); // アドバタイズリスタート
-    Serial.println("アドバタイズスタート");
-                                         }
+    //Serial.println("** 切断");
+    //pServer->startAdvertising(); // アドバタイズリスタート
+    //Serial.println("アドバタイズスタート");*/
+
+  void onDisconnect(BLEServer* pServer) {
+    // 切断時にカウンタを減らす
+    connectedClientCount--;
+    mes("❌ デバイスが切断されました。現在 " + String(connectedClientCount) + " 台接続中");
+    Serial.printf("** 切断されました。現在 %d 台接続中\n", connectedClientCount);
+    // 接続台数が0になった場合のみ、アドバタイズをリスタート
+    if (connectedClientCount == 0) {
+      // ⚠️ アドバタイズをリスタートしないと、他のデバイスは接続できません
+      pServer->startAdvertising(); 
+      Serial.println("アドバタイズリスタート");
+
+    }}
 };
 
 // BLEキャラクタリスティック書き込みコールバック (受信処理)
@@ -165,6 +191,14 @@ void setup()
    logData("SYSTEM: Setup Start");
   // --- FreeRTOS初期化 --- メッセージキューの作成
     messageQueue = xQueueCreate(MESSAGE_QUEUE_LENGTH, MESSAGE_MAX_SIZE);
+
+    // ⭐️ 修正: メッセージキューの作成 ⭐️
+    // (sizeof(BleData) = 1バイト(category) + 4バイト(float) = 5バイト)
+    //messageQueue = xQueueCreate(MESSAGE_QUEUE_LENGTH, sizeof(BleData));
+
+// ※注意: 現在のコードではメッセージキューを文字列と数値の両方で使おうとするとエラーになります。
+// 文字列メッセージ（mes()）と数値データ（sendData()）を両方使いたい場合は、
+// キューを2つに分けるか、構造体にメッセージ文字列用のバッファを組み込む必要があります。
  
    //SerialBT.begin("ESP自動往復外用"); //SE通信開始 名称 1.自動往復1内用 2.自動往復2外用 3.STAMP開発用
   // Serial1.begin(19200,SERIAL_8N1,3,1);//IO3 RX  , IO1 TX
@@ -213,7 +247,7 @@ void loop() {}//もういらない
 void bleTask(void *pvParameters) {
     
   // BLEデバイスの初期化
-     BLEDevice::init("テスト用M5"); // デバイス名を設定
+     BLEDevice::init("自動走行デバイス外"); // デバイス名を設定
     //サーバーを作成
      pServer = BLEDevice::createServer();
      pServer->setCallbacks(new MyServerCallbacks());
@@ -233,25 +267,32 @@ void bleTask(void *pvParameters) {
 
    char receivedMsg[MESSAGE_MAX_SIZE];
 
+   // ⭐️ 修正: キューの受信型を構造体に変更 ⭐️
+    BleData receivedData; 
+
+    // 構造体のバイトサイズを計算
+   size_t dataSize = sizeof(BleData);
+
 
     // タスクのメインループ
     for (;;) {
         // キューからメッセージを受信（ブロック待機時間：10ミリ秒）
         if (xQueueReceive(messageQueue, receivedMsg, pdMS_TO_TICKS(10)) == pdPASS) {
             // メッセージを受信したら、BLEで通知を送信
-            if (devCon && pTxCharacteristic != NULL) {
+            if (connectedClientCount > 0 && pTxCharacteristic != NULL) {
                 pTxCharacteristic->setValue(receivedMsg);
+                //pTxCharacteristic->setValue((uint8_t*)&receivedData, dataSize);
                 pTxCharacteristic->notify();
             }
         }
         
         // 接続状態のチェックとアドバタイズ再開処理
-        if (!devCon && oldDevCon) {
-            oldDevCon = devCon;
-        }
-        if (devCon && !oldDevCon) {
-            oldDevCon = devCon;
-        }
+        //if (!devCon && oldDevCon) {
+        //    oldDevCon = devCon;
+        //}
+        //if (devCon && !oldDevCon) {
+        //     oldDevCon = devCon;
+        //}
 
         // 💡 重要な修正: loop()内の delay(2) の代わりに vTaskDelay を使用 
         // 他のタスクにCPU使用権を譲る
@@ -274,7 +315,8 @@ void ioTask(void *pvParameters) {
     for (;;) {
         //ArduinoOTA.handle();
         // BTデータ取得 (接続チェックはbleTaskが担当するのでシンプルに)
-        if (devCon) {
+        
+        if (connectedClientCount > 0) {
             if (rxValue.length() > 0) {
                iptData = rxValue;
                val_ipt = iptData.toInt();// コマンド処理開始前にリセット
