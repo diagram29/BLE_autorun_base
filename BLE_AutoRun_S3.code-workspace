@@ -1,0 +1,28 @@
+{
+	"folders": [
+		{
+			"path": "../BLE_AutoRun_S3"
+		},
+		{
+			"name": "classic_AutoRun_S3",
+			"path": "../classic_AutoRun_S3"
+		},
+		{
+			"name": "BLE_autorun_base",
+			"path": "."
+		},
+		{
+			"path": "../BLE_Web_Controller"
+		},
+		{
+			"name": "gas-input-system",
+			"path": "../../../input/gas-input-system"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "BLE_Web_Controller",
+		"files.associations": {
+			"algorithm": "cpp"
+		}
+	}
+}

@@ -24,6 +24,7 @@ const size_t CHUNK_SIZE = 500;
  */
 void initLogger() {
   // true: マウント失敗時に自動的にフォーマットを試みる
+  /*ここから
   if (!SPIFFS.begin(true)) { 
     Serial.println("SPIFFS マウントに失敗しました。ログ保存はできません。");
     return;
@@ -35,6 +36,7 @@ void initLogger() {
   //   SPIFFS.remove(LOG_FILE_PATH);
   //   Serial.println("既存のログファイルを削除しました。");
   // }
+  ここまで*/
 }
 
 /**
@@ -42,6 +44,7 @@ void initLogger() {
  * @param logMessage 記録したいメッセージ
  */
 void logData(const String& logMessage) {
+  /*ここから
   // ファイルを追記モード (FILE_APPEND) で開く
   File logFile = SPIFFS.open(LOG_FILE_PATH, FILE_APPEND);
   
@@ -65,6 +68,7 @@ void logData(const String& logMessage) {
   
   // ファイルを閉じる
   logFile.close();
+  ここまで*/
 }
 
 /**
@@ -72,6 +76,8 @@ void logData(const String& logMessage) {
  * @param pTxCharacteristic BLEの送信特性ポインタ
  */
 void sendLogChunk(BLECharacteristic* pTxCharacteristic) {
+
+  /*ここから
     if (!pTxCharacteristic) {
         Serial.println("ERROR: BLE特性ポインタが無効です。ログを送信できません。");
         return;
@@ -109,6 +115,7 @@ void sendLogChunk(BLECharacteristic* pTxCharacteristic) {
     }
 
     logFile.close();
+    ここまで*/
 
     // 転送完了メッセージをBLEで送信
     pTxCharacteristic->setValue("--- LOG COMPLETE ---");
@@ -126,6 +133,8 @@ void sendLogChunk(BLECharacteristic* pTxCharacteristic) {
  */
 void readAndPrintLog() {
   Serial.println("\n--- SPIFFS LOG FILE CONTENT START ---");
+
+  /*ここから
   File logFile = SPIFFS.open(LOG_FILE_PATH, FILE_READ);
   
   if (!logFile) {
@@ -142,4 +151,5 @@ void readAndPrintLog() {
   
   Serial.println("--- SPIFFS LOG FILE CONTENT END ---");
   logFile.close();
+  ここまで*/
 }

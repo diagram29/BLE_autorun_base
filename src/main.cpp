@@ -7,7 +7,18 @@
 #include <Wire.h>
 #include "logger.h"  // ログ機能
 
+//ディスプレイ系
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+
+
 #include <freertos/task.h> // FreeRTOS関連のヘッダ
+
+//IOエキスパンダ、ADコンバータ　i2c系
+#include <Adafruit_MCP23X17.h>
+#include <Adafruit_ADS1X15.h> // ADS1115もこのライブラリでOK
+
 
 
 // =========================================================
@@ -23,12 +34,24 @@
 #define CHARACTERISTIC_UUID_RX "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define CHARACTERISTIC_UUID_TX "beb5484e-36e1-4688-b7f5-ea07361b26a8"
 
+#define SCREEN_WIDTH (128) //スクリーンサイズ横幅
+#define SCREEN_HEIGHT (32) //スクリーンサイズ高さ
+//#define SCREEN_HEIGHT (64)　//スクリーンサイズ高さ細かく
+
+#define OLED_SDA        (SDA)
+#define OLED_SCL        (SCL)
+#define OLED_RESET      (-1)
+#define SCREEN_ADDRESS  (0x3C)
+
+
 // リレーピン設定 (GPIO) と HIGH/LOW 定義
-const int relay[]={8,10,6,7,5,4};  // GPIOピン リレー変数[0,1,2,3]  eps32[12,14,27,26] stamp pico[25,22,21,19]　上下左右
+const int relay[]={8,9,10,11,12,13};  // GPIOピン リレー変数[0,1,2,3]  eps32[12,14,27,26] stamp pico[25,22,21,19]　上下左右  5,4,6,7,8,10
 const int str[]={1,0}; // HIGH:1 LOW:0
 
 
 #define INTERVAL 1000 //millisec
+
+
 
 
 // =========================================================
@@ -42,6 +65,14 @@ const int str[]={1,0}; // HIGH:1 LOW:0
 // =========================================================
 // 2. グローバル変数 (GLOBAL VARIABLES)
 // =========================================================
+
+//ディスプレイ
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+//ioエキスパンダ
+Adafruit_MCP23X17 mcp;
+Adafruit_ADS1115 ads; // 差動計測もこれでいけます
+
 
 // FreeRTOS
 QueueHandle_t messageQueue;
@@ -100,16 +131,20 @@ void mit(float ms);
 // IO制御
 void dows(String a,float b);
 void emj();
+void stop();
 void atlan();
 
 // リレー制御 (rreyと上下左右・停止関数)
-void rrey(String a,int b,int c,int d,int e);
+void rrey(String a,int b,int c,int d,int e,String f);
 void up(); void down(); void left(); void right();
 void udstop(); void lrstop();
 void nocostart(); void nocostop(); // ノコ制御
 
 // リセット関数
 void resetFunc(); // ★ 追加 ★
+
+//ディスプレイ関数
+void disp(String a);
 
 
 
@@ -186,6 +221,38 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 void setup()
 { //BT処理
   Serial.begin(921600);  //通信速度
+
+  Wire.begin(13, 15); // ESP32 S3の標準I2Cピン (SDA=13, SCL=15)
+
+  // MCP23017の初期化
+   mcp.begin_I2C(0x20); // アドレス0番 (基板上のアドレス設定に合わせてください)
+   for(int i=0; i<16; i++) mcp.pinMode(i, OUTPUT);
+  
+  // ADS1115の初期化
+   ads.begin();
+  // ゲイン設定（必要に応じて変更）
+  // ads.setGain(GAIN_ONE); // ±4.096V
+
+
+//ディスプレイ
+// Wire.setSDA(OLED_SDA);
+// Wire.setSCL(OLED_SCL);
+
+  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
+  {
+    for(;;);
+  }
+
+  display.clearDisplay();
+  
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(20, 10);
+  display.print(F("YAKUSIMA"));
+  display.display();
+
+
+
   // ログ機能の初期化
    initLogger();
    logData("SYSTEM: Setup Start");
@@ -229,12 +296,14 @@ void setup()
     //xTaskCreatePinnedToCore(bleTask, "BLETask", 20000, NULL, 4, NULL, 0);
 
    //リレー初期処理 
-    for(int i=0;i<6;i++){pinMode(relay[i], OUTPUT); 
-                         digitalWrite(relay[i], str[1]);} //リレー1-4　選択 オフ
+    for(int i=0;i<6;i++){mcp.pinMode(relay[i], OUTPUT); 
+                         mcp.digitalWrite(relay[i], str[1]);} //リレー1-4　選択 オフ
     downr = 0.5;
 
     logData("SYSTEM: Setup Finished");
     readAndPrintLog();//起動時にログ内容をシリアルに出力(テスト)
+
+
 }
 void loop() {}//もういらない
 
@@ -247,7 +316,7 @@ void loop() {}//もういらない
 void bleTask(void *pvParameters) {
     
   // BLEデバイスの初期化
-     BLEDevice::init("自動走行デバイス外"); // デバイス名を設定
+     BLEDevice::init("自動走行デバイステスト用"); // デバイス名を設定
     //サーバーを作成
      pServer = BLEDevice::createServer();
      pServer->setCallbacks(new MyServerCallbacks());
@@ -351,7 +420,7 @@ else if(iptData == "restart"){
 }
 
 //リレー入力処理
-else if (val_ipt == 93) {emj();}   //緊急停止
+else if (val_ipt == 93) {stop();}   //緊急停止
 else{ switch (val_ipt) {
 
   //リレー駆動
@@ -516,25 +585,29 @@ void resetFunc() {
 
 
 //各リレーへ信号送信処理
-void rrey(String a,int b,int c,int d,int e){mes(a); 
-  for (int i = b; i < c+1; i++) {pinMode(relay[i], OUTPUT);}
-        digitalWrite(relay[b], str[d]);
-        digitalWrite(relay[c], str[e]);}     // HIGH:1 LOW:0
-    void up     (){rrey("上昇します",      0,1,      0,1);}
-    void down   (){rrey("下降します",      0,1,      1,0);}
+void rrey(String a,int b,int c,int d,int e,String f){mes(a); disp(f);
+  for (int i = b; i < c+1; i++) {mcp.pinMode(relay[i], OUTPUT);}
+        mcp.digitalWrite(relay[b], str[d]);
+        mcp.digitalWrite(relay[c], str[e]);}     // HIGH:1 LOW:0
+    void up     (){rrey("上昇します",      0,1,      0,1, "up");}
+    void down   (){rrey("下降します",      0,1,      1,0, "down");}
 
-    void left   (){rrey("奥へ走行します",    2,3,      0,1);}
-    void right  (){rrey("手前へ走行します",    2,3,      1,0);}
+    void left   (){rrey("奥へ走行します",    2,3,      0,1, "left");}
+    void right  (){rrey("手前へ走行します",    2,3,      1,0, "Right");}
 
-    void udstop (){rrey("上下を停止します",  0,1,      1,1);}
-    void lrstop (){rrey("走行を停止します",  2,3,      1,1);}
+    void udstop (){rrey("上下を停止します",  0,1,      1,1, "stop1");}
+    void lrstop (){rrey("走行を停止します",  2,3,      1,1, "stop2");}
 
-    void nocostart (){rrey("ノコを回転します", 4,4,  1,1);}
-    void nocostop  (){rrey("ノコを停止",     4,4,  0,0);}
+    void nocostart (){rrey("ノコを回転します", 4,4,  1,1, "Start");}
+    void nocostop  (){rrey("ノコを停止",     4,4,  0,0, "Nstop" );}
+
+void stop(){mes("全ての動作を停止""\n現在" + String(myTime) + "秒経過");  //緊急停止 信号
+   for(int i=0;i<6;i++){mcp.pinMode(relay[i], OUTPUT); 
+                        mcp.digitalWrite(relay[i], str[1]);}} //全リレー　選択 オフ
 
 void emj(){mes("緊急停止""\n現在" + String(myTime) + "秒経過");  //緊急停止 信号
-   for(int i=0;i<6;i++){pinMode(relay[i], OUTPUT); 
-                        digitalWrite(relay[i], str[1]);}} //全リレー　選択 オフ
+   for(int i=0;i<6;i++){mcp.pinMode(relay[i], OUTPUT); 
+                        mcp.digitalWrite(relay[i], str[1]);}} //全リレー　選択 オフ
 
 //降下処理
 void dows(String a,float b){mes(a); down(); mit(b*1000); udstop();}
@@ -576,5 +649,35 @@ void atlan(){
 mes("\n指示" + String(iptData) + "処理が終了しました"
         "\nシステム起動から" + String(myTime) + "秒経過中…");
 }bailout:;}
-        
 
+/*
+void sens() {
+    ads.setGain(0);
+    int16_t val_0 = ads.readADC(0);  
+    int16_t val_1 = ads.readADC(1);  
+    int16_t val_2 = ads.readADC(2);  
+    int16_t val_3 = ads.readADC(3);  
+
+    float f = ads.toVoltage(1);  // voltage factor
+    Serial.println(f, 8);
+
+    Serial.print("\tAnalog0: "); Serial.print(val_0); Serial.print('\t'); Serial.println(val_0 * f, 3);
+    Serial.print("\tAnalog1: "); Serial.print(val_1); Serial.print('\t'); Serial.println(val_1 * f, 3);
+    Serial.print("\tAnalog2: "); Serial.print(val_2); Serial.print('\t'); Serial.println(val_2 * f, 3);
+    Serial.print("\tAnalog3: "); Serial.print(val_3); Serial.print('\t'); Serial.println(val_3 * f, 3);
+    Serial.println();
+
+    delay(1000);
+}
+*/
+void disp(String a){
+  display.clearDisplay();
+  
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(20, 10);
+  display.print(a);
+  display.display();
+
+}
+        
